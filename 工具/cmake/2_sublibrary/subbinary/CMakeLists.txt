@@ -10,7 +10,6 @@ add_executable(${PROJECT_NAME} main.cpp)
 # 使用别名sub :: lib2从subproject2链接仅包含头的库
 # 这将导致该目标的包含目录添加到该项目中
 
-target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/../sublib2)
 target_link_libraries(${PROJECT_NAME}
     sub::lib1)
 #    sub::lib2)
