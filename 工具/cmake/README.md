@@ -1,6 +1,7 @@
 
 ## info
 * [引用](https://sfumecjf.github.io/cmake-examples-Chinese/)
+* [github](https://github.com/ttroy50/cmake-examples)
 
 ## 01_hello_cmake
 ### cmake_minimum_required
@@ -155,4 +156,111 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
     * 设置一个 Environment Variable) 到给定值。随后的调用$ENV{<varible>}将返回此新值。
     * 此命令仅影响当前的CMake进程，不影响调用CMake的进程，也不影响整个系统环境，也不影响后续构建或测试过程的环境。
     * 如果在空字符串之后ENV{}或如果没有参数``，则此命令将清除环境变量的任何现有值。
+
+## 06_compile_type
+* 首先说一下什么是编译标志（或者 叫编译选项）。可执行文件的生成离不开编译和链接，那么如何编译，比如编译时使用C++的哪一个标准？这些编译设置都在CMAKE_CXX_FLAGS变量中。（C语言编译选项是CMAKE_C_FLAGS）
+
+### 设置每个目标编译标志
+* 在现代CMake中设置C ++标志的推荐方法是专门针对某个目标（target）设置标志，可以通过target_compile_definitions（）函数设置某个目标的编译标志。
+```linux
+target_compile_definitions(cmake_examples_compile_flags
+    PRIVATE EX3
+)
+```
+* 如果这个目标是一个库（cmake_examples_compile_flags），编译器在编译目标时添加定义-DEX3 ，并且选择了范围PUBLIC或INTERFACE，该定义-DEX3也将包含在链接此目标（cmake_examples_compile_flags）的所有可执行文件中。 注意，本语句使用了PRIVATE，所以编译选项不会传递。
+
+* 对于编译器选项，还可以使用target_compile_options（）函数
+```linux
+target_compile_options(<target> [BEFORE]
+  <INTERFACE|PUBLIC|PRIVATE> [items1...]
+  [<INTERFACE|PUBLIC|PRIVATE> [items2...] ...])
+```
+
+* 是给 target 添加编译选项， target 指的是由 add_executable()产生的可执行文件或 add_library()添加进来的库。<INTERFACE|PUBLIC|PRIVATE>指的是`[items...]` 选项可以传播的范围， PUBLIC and INTERFACE会传播 <target>的 INTERFACE_COMPILE_DEFINITIONS 属性， PRIVATE and PUBLIC 会传播 target 的 COMPILE_DEFINITIONS 属性。
+
+### 设置默认编译标志
+* 默认的CMAKE_CXX_FLAGS为空或包含适用于构建类型的标志。 要设置其他默认编译标志，如下使用
+```linux
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEX2" CACHE STRING "Set C++ Compiler Flags" FORCE)
+```
+
+* 强制设置默认C++编译标志变量为缓存变量，如CMake（五） build type所说，该缓存变量被定义在文件中，相当于全局变量，源文件中也可以使用这个变量。这个变量原本包含的参数仍然存在，只是添加了EX2。CACHE STRING `"Set C++ Compiler Flags"` FORCE命令是为了强制将CMAKE_CXX_FLAGS变量 放到CMakeCache.txt文件中。`"${CMAKE_CXX_FLAGS} -DEX2"`这个字符串可以保留原有的CMAKE_CXX_FLAGS中的参数，额外添加了一个EX2参数。注意写法：空格，并且参数前加了-D。类似设置CMAKE_CXX_FLAGS，还可以设置其他选项：
+  * 设置C编译标志： CMAKE_C_FLAGS
+  * 设置链接标志：CMAKE_LINKER_FLAGS.
+
+### 设置CMake标志
+* 在cmake命令行中：`cmake .. -DCMAKE_CXX_FLAGS="-DEX3"`
+
+
+## 07_include_third_part
+* 几乎所有不平凡的项目都将要求包含第三方库，头文件或程序。 CMake支持使用find_package（）函数查找这些工具的路径。 这将从CMAKE_MODULE_PATH中的文件夹列表中搜索格式为`FindXXX.cmake`的CMake模块。 在linux上，默认搜索路径将是`/usr/share/cmake/Modules`。
+
+### Finding a Package
+* 如上所述，find_package（）函数将从CMAKE_MODULE_PATH中的文件夹列表中搜索`FindXXX.cmake`中的CMake模块。 find_package参数的确切格式取决于要查找的模块。 这通常记录在FindXXX.cmake文件的顶部。
+
+```linux
+find_package(Boost 1.46.1 REQUIRED COMPONENTS filesystem system)
+```
+
+* 参数：
+  * Boost-库名称。 这是用于查找模块文件FindBoost.cmake的一部分
+  * 1.46.1 - 需要的boost库最低版本
+  * REQUIRED - 告诉模块这是必需的，如果找不到会报错
+  * COMPONENTS - 要查找的库列表。从后面的参数代表的库里找boost
+  * 可以使用更多参数，也可以使用其他变量。 在后面的示例中提供了更复杂的设置。
+
+### Checking if the package is found
+* 大多数被包含的包将设置变量XXX_FOUND，该变量可用于检查软件包在系统上是否可用。
+* 在此示例中，变量为Boost_FOUND：
+```linux
+if(Boost_FOUND)
+    message ("boost found")
+    include_directories(${Boost_INCLUDE_DIRS})
+else()
+    message (FATAL_ERROR "Cannot find Boost")
+endif()
+```
+
+### Exported Variables
+* 找到包后，它会自动导出变量，这些变量可以通知用户在哪里可以找到库，头文件或可执行文件。 与XXX_FOUND变量类似，它们与包绑定在一起，通常记录在FindXXX.cmake文件的顶部。
+
+* 本例中的变量
+```linux
+Boost_INCLUDE_DIRS - boost头文件的路径
+```
+
+### Alias / Imported targets别名/导入目标
+* 大多数modern CMake库在其模块文件中导出别名目标。 导入目标的好处是它们也可以填充包含目录和链接的库。 例如，从CMake v3.5开始，Boost模块支持此功能。 与使用自己的别名目标相似，模块中的别名可以使引用找到的目标变得更加容易。 对于Boost，所有目标均使用Boost ::标识符，然后使用子系统名称导出。 例如:
+  * Boost::boost for header only libraries
+  * Boost::system for the boost system library.
+  * Boost::filesystem for filesystem library.
+* 注意：与您自己的目标一样，这些目标包括它们的依赖关系，因此与Boost :: filesystem链接将自动添加Boost :: boost和Boost :: system依赖关系。
+* 要链接到导入的目标，可以使用以下命令
+```linux
+target_link_libraries( third_party_include
+      PRIVATE
+          Boost::filesystem
+  )
+```
+
+### Non-alias targets
+* 尽管大多数现代库都使用导入的目标，但并非所有模块都已更新。 如果未更新库，则通常会发现以下可用变量：
+  * xxx_INCLUDE_DIRS - 指向库的包含目录的变量。
+  * xxx_LIBRARY - 指向库路径的变量。
+
+* 然后可以将它们添加到您的target_include_directories和target_link_libraries中，如下所示：
+```linux
+# Include the boost headers
+  target_include_directories(third_party_include
+      PRIVATE ${Boost_INCLUDE_DIRS}
+  )
+
+  # link against the boost libraries
+  target_link_libraries(third_party_include
+      PRIVATE
+      ${Boost_SYSTEM_LIBRARY}
+      ${Boost_FILESYSTEM_LIBRARY}
+  )
+```
+
 
